@@ -192,6 +192,7 @@ class PropertiesOpp extends StatelessWidget {
                   onPressed: () => _showPropertyHistory(context),
                 ),
               ),
+
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
