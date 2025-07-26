@@ -10,8 +10,11 @@ class ApiPaths {
   static const resetPassword = '$baseUrl/api/reset-password';
 
   // Admin endpoints
+  static const adminRegister = '$baseUrl/api/admin/register';
   static const adminLogin = '$baseUrl/api/admin/login';
-  static const getPendingLandlords = '$baseUrl/api/admin/pending-landlords';
-  static const approveLandlord = '$baseUrl/api/admin/approve-landlord';
-  static const rejectLandlord = '$baseUrl/api/admin/reject-landlord';
+  static const adminStats = '$baseUrl/api/admin/stats';
+  static const adminPendingLandlords = '$baseUrl/api/admin/pending-landlords';
+  static const adminPendingProperties = '$baseUrl/api/admin/pending-properties';
+  static const adminVerifyLandlord = '$baseUrl/api/admin/verify-landlord';
+  static const adminVerifyProperty = '$baseUrl/api/admin/verify-property';
 }

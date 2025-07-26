@@ -106,27 +106,6 @@ class AuthService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Check if OTP is required
-        if (data['requiresOtp'] == true) {
-          return {
-            'success': true,
-            'requiresOtp': true,
-            'email': data['email'],
-            'role': data['role'],
-            'message': data['message'],
-          };
-        }
-
-        // Check if verification is required
-        if (response.statusCode == 403 && data['requiresVerification'] == true) {
-          return {
-            'success': false,
-            'requiresVerification': true,
-            'message': data['message'],
-          };
-        }
-
-        // Normal login success
         return {
           'success': true,
           'user': data['user'],
@@ -135,8 +114,8 @@ class AuthService {
       } else if (response.statusCode == 403) {
         return {
           'success': false,
-          'requiresVerification': data['requiresVerification'] ?? false,
-          'message': data['message'] ?? 'Account not verified',
+          'requiresApproval': data['requiresApproval'] ?? false,
+          'message': data['error'] ?? 'Account not verified',
         };
       } else {
         return {
@@ -212,6 +191,10 @@ class AuthService {
           result['user'] = data['user'];
         }
 
+        if (data['admin'] != null) {
+          result['admin'] = data['admin'];
+        }
+
         return result;
       } else {
         return {
@@ -258,6 +241,36 @@ class AuthService {
   }
 
   // Admin methods
+  static Future<Map<String, dynamic>> registerAdmin({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiPaths.adminRegister),
+        body: jsonEncode({
+          'name': name,
+          'email': email,
+          'password': password,
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      final data = jsonDecode(response.body);
+
+      return {
+        'success': response.statusCode == 200,
+        'message': data['message'] ?? 'Admin registration failed',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
   static Future<Map<String, dynamic>> adminLogin({
     required String email,
     required String password,
@@ -291,6 +304,60 @@ class AuthService {
         'success': false,
         'message': 'Network error: ${e.toString()}',
       };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getAdminStats() async {
+    try {
+      final response = await http.get(Uri.parse(ApiPaths.adminStats));
+      final data = jsonDecode(response.body);
+      return data;
+    } catch (e) {
+      throw Exception('Failed to get stats: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getPendingLandlords() async {
+    try {
+      final response = await http.get(Uri.parse(ApiPaths.adminPendingLandlords));
+      final data = jsonDecode(response.body);
+      return data;
+    } catch (e) {
+      throw Exception('Failed to get pending landlords: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getPendingProperties() async {
+    try {
+      final response = await http.get(Uri.parse(ApiPaths.adminPendingProperties));
+      final data = jsonDecode(response.body);
+      return data;
+    } catch (e) {
+      throw Exception('Failed to get pending properties: $e');
+    }
+  }
+
+  static Future<void> verifyLandlord(int landlordId, bool approve) async {
+    try {
+      await http.post(
+        Uri.parse('${ApiPaths.adminVerifyLandlord}/$landlordId'),
+        body: jsonEncode({'approve': approve}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      throw Exception('Failed to verify landlord: $e');
+    }
+  }
+
+  static Future<void> verifyProperty(int propertyId, bool approve) async {
+    try {
+      await http.post(
+        Uri.parse('${ApiPaths.adminVerifyProperty}/$propertyId'),
+        body: jsonEncode({'approve': approve}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      throw Exception('Failed to verify property: $e');
     }
   }
 }

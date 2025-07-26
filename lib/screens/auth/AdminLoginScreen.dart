@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '/constants/auth_service.dart';
 import 'admin_dashboard.dart';
-import 'verify_otp_screen.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -19,7 +18,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   bool _isLoading = false;
 
   Future<void> _adminLogin() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    final emailLower = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+
+    if (emailLower.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
@@ -30,28 +32,24 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
     try {
       final response = await AuthService.adminLogin(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: emailLower,
+        password: password,
       );
 
-      if (response['requiresOtp'] == true) {
+      if (response['success'] == true && response['admin'] != null) {
         if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VerifyOtpScreen(
-                email: _emailController.text.trim(),
-                purpose: 'login',
-                userRole: 'admin',
-              ),
-            ),
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['message'] ?? 'Login successful')),
           );
-        }
-      } else if (response['user'] != null) {
-        if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const AdminDashboard()),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['message'] ?? 'Login failed')),
           );
         }
       }
@@ -67,18 +65,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   }
 
   Future<void> _adminRegister() async {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _registerPasswordController.text.isEmpty) {
+    final name = _nameController.text.trim();
+    final emailLower = _emailController.text.trim().toLowerCase();
+    final password = _registerPasswordController.text;
+
+    if (name.isEmpty || emailLower.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
       return;
     }
 
-    if (!_emailController.text.toLowerCase().contains('alfa')) {
+    if (!emailLower.contains('alfa')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Admin email must contain "alfa"')),
+        const SnackBar(content: Text('')),
       );
       return;
     }
@@ -87,22 +87,26 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
     try {
       final response = await AuthService.registerAdmin(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _registerPasswordController.text,
+        name: name,
+        email: emailLower,
+        password: password,
       );
 
       if (response['success'] == true) {
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['message'] ?? 'Registration successful')),
+          );
+          // Navigate directly to dashboard after successful registration
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (_) => VerifyOtpScreen(
-                email: _emailController.text.trim(),
-                purpose: 'register',
-                userRole: 'admin',
-              ),
-            ),
+            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['message'] ?? 'Registration failed')),
           );
         }
       }
@@ -184,7 +188,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      labelText: _isRegisterMode ? 'Email (must contain "alfa")' : 'Email',
+                      labelText: _isRegisterMode
+                          ? 'Email (must contain "alfa")'
+                          : 'Email',
                       prefixIcon: const Icon(Icons.email),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -243,7 +249,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     onPressed: () {
                       setState(() {
                         _isRegisterMode = !_isRegisterMode;
-                        // Clear controllers when switching modes
                         _nameController.clear();
                         _emailController.clear();
                         _passwordController.clear();
@@ -266,7 +271,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         border: Border.all(color: Colors.amber[300]!),
                       ),
                       child: const Text(
-                        '⚠️ Admin registration requires email verification and is restricted to authorized personnel only.',
+                        '⚠️ Admin registration is restricted to authorized personnel only.',
                         style: TextStyle(fontSize: 12, color: Colors.black87),
                         textAlign: TextAlign.center,
                       ),
