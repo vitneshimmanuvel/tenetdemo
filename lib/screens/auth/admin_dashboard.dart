@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '/constants/auth_service.dart';
+import '/screens/user_preferences.dart';
 import 'Login.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -13,37 +14,141 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   late TabController _tabController;
   List<Map<String, dynamic>> _pendingLandlords = [];
   List<Map<String, dynamic>> _pendingProperties = [];
+  List<Map<String, dynamic>> _allTenants = [];
+  List<Map<String, dynamic>> _allLandlords = [];
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _loadDashboardData();
   }
 
   Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
 
     try {
-      final stats = await AuthService.getAdminStats();
-      final landlords = await AuthService.getPendingLandlords();
-      final properties = await AuthService.getPendingProperties();
+      print('Loading dashboard data...');
+
+      // Load all data with individual error handling
+      await Future.wait([
+        _loadStats(),
+        _loadPendingLandlords(),
+        _loadPendingProperties(),
+        _loadAllTenants(),
+        _loadAllLandlords(),
+      ]);
+
+      print('All data loaded successfully');
 
       setState(() {
-        _stats = stats;
-        _pendingLandlords = landlords['landlords'] ?? [];
-        _pendingProperties = properties['properties'] ?? [];
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      print('Error loading dashboard data: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load dashboard data: ${e.toString()}';
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e')),
+          SnackBar(
+            content: Text('Failed to load data: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
+    }
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final stats = await AuthService.getAdminStats();
+      setState(() {
+        _stats = stats ?? {
+          'totalTenants': 0,
+          'totalLandlords': 0,
+          'totalProperties': 0,
+        };
+      });
+      print('Stats loaded: $_stats');
+    } catch (e) {
+      print('Error loading stats: $e');
+      setState(() {
+        _stats = {
+          'totalTenants': 0,
+          'totalLandlords': 0,
+          'totalProperties': 0,
+        };
+      });
+    }
+  }
+
+  Future<void> _loadPendingLandlords() async {
+    try {
+      final landlords = await AuthService.getPendingLandlords();
+      setState(() {
+        _pendingLandlords = landlords ?? [];
+      });
+      print('Pending landlords loaded: ${_pendingLandlords.length}');
+    } catch (e) {
+      print('Error loading pending landlords: $e');
+      setState(() {
+        _pendingLandlords = [];
+      });
+    }
+  }
+
+  Future<void> _loadPendingProperties() async {
+    try {
+      final properties = await AuthService.getPendingProperties();
+      setState(() {
+        _pendingProperties = properties ?? [];
+      });
+      print('Pending properties loaded: ${_pendingProperties.length}');
+    } catch (e) {
+      print('Error loading pending properties: $e');
+      setState(() {
+        _pendingProperties = [];
+      });
+    }
+  }
+
+  Future<void> _loadAllTenants() async {
+    try {
+      final tenants = await AuthService.getAllTenants();
+      setState(() {
+        _allTenants = tenants ?? [];
+      });
+      print('All tenants loaded: ${_allTenants.length}');
+    } catch (e) {
+      print('Error loading tenants: $e');
+      setState(() {
+        _allTenants = [];
+      });
+    }
+  }
+
+  Future<void> _loadAllLandlords() async {
+    try {
+      final landlords = await AuthService.getAllLandlords();
+      setState(() {
+        _allLandlords = landlords ?? [];
+      });
+      print('All landlords loaded: ${_allLandlords.length}');
+    } catch (e) {
+      print('Error loading landlords: $e');
+      setState(() {
+        _allLandlords = [];
+      });
     }
   }
 
@@ -52,14 +157,21 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       await AuthService.verifyLandlord(landlordId, approve);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Landlord ${approve ? 'approved' : 'rejected'} successfully')),
+          SnackBar(
+            content: Text('Landlord ${approve ? 'approved' : 'rejected'} successfully'),
+            backgroundColor: approve ? Colors.green : Colors.red,
+          ),
         );
+        // Reload data after verification
         _loadDashboardData();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e')),
+          SnackBar(
+            content: Text('Failed to update: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -70,24 +182,448 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       await AuthService.verifyProperty(propertyId, approve);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Property ${approve ? 'approved' : 'rejected'} successfully')),
+          SnackBar(
+            content: Text('Property ${approve ? 'approved' : 'rejected'} successfully'),
+            backgroundColor: approve ? Colors.green : Colors.red,
+          ),
         );
+        // Reload data after verification
         _loadDashboardData();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e')),
+          SnackBar(
+            content: Text('Failed to update: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
   }
 
-  void _logout() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+  void _viewTenantDetails(Map<String, dynamic> tenant) async {
+    try {
+      final tenantId = tenant['id'];
+      if (tenantId == null) {
+        throw Exception('Tenant ID is null');
+      }
+
+      final details = await AuthService.getTenantDetails(tenantId.toString());
+      if (mounted) {
+        _showTenantDetailsDialog(details);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load tenant details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _viewLandlordDetails(Map<String, dynamic> landlord) async {
+    try {
+      final landlordId = landlord['id'];
+      if (landlordId == null) {
+        throw Exception('Landlord ID is null');
+      }
+
+      final details = await AuthService.getLandlordDetails(landlordId.toString());
+      if (mounted) {
+        _showLandlordDetailsDialog(details);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load landlord details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showTenantDetailsDialog(Map<String, dynamic> details) {
+    final tenant = details['tenant'] ?? {};
+    final ratings = details['ratings'] as List<dynamic>? ?? [];
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+            minHeight: 300,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Fixed Header
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey, width: 0.5)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Tenant Details',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Scrollable Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tenant Info
+                      _buildDetailRow('Name', _getSafeString(tenant['name'])),
+                      _buildDetailRow('Email', _getSafeString(tenant['email'])),
+                      _buildDetailRow('Phone', _getSafeString(tenant['phone'])),
+                      _buildDetailRow('Tenancy ID', _getSafeString(tenant['tenancy_id'])),
+                      _buildDetailRow('Joined', _formatDate(_getSafeString(tenant['created_at']))),
+
+                      const SizedBox(height: 20),
+                      Text(
+                        'Rating History (${ratings.length} ratings)',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Ratings List
+                      if (ratings.isEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text(
+                              'No ratings available',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        )
+                      else
+                        ...ratings.map((rating) {
+                          final ratingMap = rating as Map<String, dynamic>;
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _getSafeString(ratingMap['address'], 'Property'),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getRatingColor(ratingMap['overall_rating']),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          '${_getSafeInt(ratingMap['overall_rating'])}/5',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Landlord: ${_getSafeString(ratingMap['landlord_name'])}',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                  Text(
+                                    'Date: ${_formatDate(_getSafeString(ratingMap['created_at']))}',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                  if (_getSafeString(ratingMap['comments']).isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 8),
+                                      child: Text(
+                                        'Comments: ${ratingMap['comments']}',
+                                        style: TextStyle(color: Colors.grey[700]),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  void _showLandlordDetailsDialog(Map<String, dynamic> details) {
+    final landlord = details['landlord'] ?? {};
+    final properties = details['properties'] as List<dynamic>? ?? [];
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+            minHeight: 300,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Fixed Header
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey, width: 0.5)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Landlord Details',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Scrollable Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Landlord Info
+                      _buildDetailRow('Name', _getSafeString(landlord['name'])),
+                      _buildDetailRow('Email', _getSafeString(landlord['email'])),
+                      _buildDetailRow('Phone', _getSafeString(landlord['phone'])),
+                      _buildDetailRow('Address', _getSafeString(landlord['address'])),
+                      _buildDetailRow('City', _getSafeString(landlord['city'])),
+                      _buildDetailRow('Postal Code', _getSafeString(landlord['postal_code'])),
+                      _buildDetailRow('Joined', _formatDate(_getSafeString(landlord['created_at']))),
+
+                      const SizedBox(height: 20),
+                      Text(
+                        'Properties (${properties.length} properties)',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Properties List
+                      if (properties.isEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text(
+                              'No properties available',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        )
+                      else
+                        ...properties.map((property) {
+                          final propertyMap = property as Map<String, dynamic>;
+                          final avgRating = _getSafeDouble(propertyMap['average_rating']);
+                          final totalRatings = _getSafeInt(propertyMap['total_ratings']);
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _getSafeString(propertyMap['address'], 'Property'),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      if (avgRating > 0)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _getRatingColor(avgRating),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${avgRating.toStringAsFixed(1)}/5',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${_getSafeString(propertyMap['city'])}, ${_getSafeString(propertyMap['postal_code'])}',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                  Text(
+                                    'Total Ratings: $totalRatings',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                  Text(
+                                    'Added: ${_formatDate(_getSafeString(propertyMap['created_at']))}',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper methods to safely handle null values
+  String _getSafeString(dynamic value, [String defaultValue = 'N/A']) {
+    if (value == null) return defaultValue;
+    return value.toString();
+  }
+
+  int _getSafeInt(dynamic value, [int defaultValue = 0]) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
+  double _getSafeDouble(dynamic value, [double defaultValue = 0.0]) {
+    if (value == null) return defaultValue;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
+  Color _getRatingColor(dynamic rating) {
+    final double ratingValue = _getSafeDouble(rating);
+    if (ratingValue >= 4.0) return Colors.green;
+    if (ratingValue >= 3.0) return Colors.orange;
+    return Colors.red;
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null || dateString == 'N/A') return 'N/A';
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
+  void _logout() async {
+    await UserPreferences.clearUser();
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
   }
 
   @override
@@ -115,22 +651,54 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
+          isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.dashboard), text: 'Overview'),
-            Tab(icon: Icon(Icons.person_add), text: 'Landlords'),
-            Tab(icon: Icon(Icons.home_work), text: 'Properties'),
+            Tab(icon: Icon(Icons.people), text: 'Tenants'),
+            Tab(icon: Icon(Icons.business), text: 'Landlords'),
+            Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
             Tab(icon: Icon(Icons.analytics), text: 'Analytics'),
           ],
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading dashboard data...'),
+          ],
+        ),
+      )
+          : _errorMessage.isNotEmpty
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadDashboardData,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      )
           : TabBarView(
         controller: _tabController,
         children: [
           _buildOverviewTab(),
+          _buildTenantsTab(),
           _buildLandlordsTab(),
-          _buildPropertiesTab(),
+          _buildPendingTab(),
           _buildAnalyticsTab(),
         ],
       ),
@@ -152,17 +720,17 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           // Stats Cards
           Row(
             children: [
-              Expanded(child: _buildStatCard('Total Tenants', _stats['totalTenants']?.toString() ?? '0', Icons.people, Colors.green)),
+              Expanded(child: _buildStatCard('Total Tenants', _getSafeInt(_stats['totalTenants']).toString(), Icons.people, Colors.green)),
               const SizedBox(width: 10),
-              Expanded(child: _buildStatCard('Total Landlords', _stats['totalLandlords']?.toString() ?? '0', Icons.business, Colors.blue)),
+              Expanded(child: _buildStatCard('Total Landlords', _getSafeInt(_stats['totalLandlords']).toString(), Icons.business, Colors.blue)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildStatCard('Pending Approvals', _pendingLandlords.length.toString(), Icons.pending_actions, Colors.orange)),
+              Expanded(child: _buildStatCard('Pending Approvals', (_pendingLandlords.length + _pendingProperties.length).toString(), Icons.pending_actions, Colors.orange)),
               const SizedBox(width: 10),
-              Expanded(child: _buildStatCard('Total Properties', _stats['totalProperties']?.toString() ?? '0', Icons.home, Colors.purple)),
+              Expanded(child: _buildStatCard('Total Properties', _getSafeInt(_stats['totalProperties']).toString(), Icons.home, Colors.purple)),
             ],
           ),
           const SizedBox(height: 20),
@@ -178,7 +746,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     spreadRadius: 1,
                     blurRadius: 6,
                     offset: const Offset(0, 3),
@@ -198,8 +766,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     const Text('Pending Landlord Approvals:', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     ..._pendingLandlords.take(3).map((landlord) => _buildActivityItem(
-                      'New landlord registration: ${landlord['name']}',
-                      landlord['email'],
+                      'New landlord registration: ${_getSafeString(landlord['name'], 'Unknown')}',
+                      _getSafeString(landlord['email']),
                       Icons.person_add,
                       Colors.blue,
                     )),
@@ -209,8 +777,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     const Text('Pending Property Requests:', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     ..._pendingProperties.take(3).map((property) => _buildActivityItem(
-                      'New property request: ${property['address']}',
-                      'by ${property['landlord_name']}',
+                      'New property request: ${_getSafeString(property['address'], 'Unknown')}',
+                      'by ${_getSafeString(property['landlord_name'], 'Unknown')}',
                       Icons.home_work,
                       Colors.green,
                     )),
@@ -224,7 +792,172 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     );
   }
 
+  Widget _buildTenantsTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'All Tenants',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${_allTenants.length} total',
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _allTenants.isEmpty
+                ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('No tenants registered yet', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
+            )
+                : ListView.builder(
+              itemCount: _allTenants.length,
+              itemBuilder: (context, index) {
+                final tenant = _allTenants[index];
+                final avgRating = _getSafeDouble(tenant['average_rating']);
+                final totalRatings = _getSafeInt(tenant['total_ratings']);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                      child: const Icon(Icons.person, color: Colors.blue),
+                    ),
+                    title: Text(
+                      _getSafeString(tenant['name'], 'Unknown'),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ID: ${_getSafeString(tenant['tenancy_id'])}'),
+                        Text('Email: ${_getSafeString(tenant['email'])}'),
+                        Text('Ratings: $totalRatings${avgRating > 0 ? ' (Avg: ${avgRating.toStringAsFixed(1)})' : ''}'),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () => _viewTenantDetails(tenant),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLandlordsTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'All Landlords',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${_allLandlords.length} approved',
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _allLandlords.isEmpty
+                ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.business_outlined, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('No approved landlords yet', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+              ),
+            )
+                : ListView.builder(
+              itemCount: _allLandlords.length,
+              itemBuilder: (context, index) {
+                final landlord = _allLandlords[index];
+                final totalProperties = _getSafeInt(landlord['total_properties']);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.green.withValues(alpha: 0.1),
+                      child: const Icon(Icons.business, color: Colors.green),
+                    ),
+                    title: Text(
+                      _getSafeString(landlord['name'], 'Unknown'),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Email: ${_getSafeString(landlord['email'])}'),
+                        Text('City: ${_getSafeString(landlord['city'])}'),
+                        Text('Properties: $totalProperties'),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios),
+                    onTap: () => _viewLandlordDetails(landlord),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingTab() {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.grey,
+            tabs: [
+              Tab(text: 'Pending Landlords'),
+              Tab(text: 'Pending Properties'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildPendingLandlordsTab(),
+                _buildPendingPropertiesTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingLandlordsTab() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -269,7 +1002,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     );
   }
 
-  Widget _buildPropertiesTab() {
+  Widget _buildPendingPropertiesTab() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -315,6 +1048,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }
 
   Widget _buildAnalyticsTab() {
+    final totalUsers = _getSafeInt(_stats['totalTenants']) + _getSafeInt(_stats['totalLandlords']);
+    final pendingRequests = _pendingLandlords.length + _pendingProperties.length;
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -331,9 +1067,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
               children: [
-                _buildAnalyticsCard('Total Users', (_stats['totalTenants'] ?? 0) + (_stats['totalLandlords'] ?? 0), Icons.people, Colors.indigo),
-                _buildAnalyticsCard('Active Properties', _stats['totalProperties'] ?? 0, Icons.home, Colors.green),
-                _buildAnalyticsCard('Pending Requests', _pendingLandlords.length + _pendingProperties.length, Icons.pending, Colors.orange),
+                _buildAnalyticsCard('Total Users', totalUsers, Icons.people, Colors.indigo),
+                _buildAnalyticsCard('Active Properties', _getSafeInt(_stats['totalProperties']), Icons.home, Colors.green),
+                _buildAnalyticsCard('Pending Requests', pendingRequests, Icons.pending, Colors.orange),
                 _buildAnalyticsCard('System Health', 100, Icons.health_and_safety, Colors.red),
               ],
             ),
@@ -351,7 +1087,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 6,
             offset: const Offset(0, 3),
@@ -383,7 +1119,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundColor: color.withOpacity(0.1),
+            backgroundColor: color.withValues(alpha: 0.1),
             child: Icon(icon, size: 16, color: color),
           ),
           const SizedBox(width: 12),
@@ -402,6 +1138,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }
 
   Widget _buildLandlordCard(Map<String, dynamic> landlord) {
+    final landlordId = _getSafeInt(landlord['id']);
+    if (landlordId == 0) return const SizedBox.shrink();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -413,7 +1152,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: Colors.blue.withOpacity(0.1),
+                  backgroundColor: Colors.blue.withValues(alpha: 0.1),
                   child: const Icon(Icons.person, color: Colors.blue),
                 ),
                 const SizedBox(width: 12),
@@ -422,11 +1161,11 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        landlord['name'] ?? 'Unknown',
+                        _getSafeString(landlord['name'], 'Unknown'),
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        landlord['email'] ?? '',
+                        _getSafeString(landlord['email']),
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -435,16 +1174,16 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               ],
             ),
             const SizedBox(height: 12),
-            Text('Phone: ${landlord['phone'] ?? 'Not provided'}'),
-            Text('Address: ${landlord['address'] ?? 'Not provided'}'),
-            Text('City: ${landlord['city'] ?? 'Not provided'}'),
-            Text('Postal Code: ${landlord['postal_code'] ?? 'Not provided'}'),
+            Text('Phone: ${_getSafeString(landlord['phone'], 'Not provided')}'),
+            Text('Address: ${_getSafeString(landlord['address'], 'Not provided')}'),
+            Text('City: ${_getSafeString(landlord['city'], 'Not provided')}'),
+            Text('Postal Code: ${_getSafeString(landlord['postal_code'], 'Not provided')}'),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 ElevatedButton.icon(
-                  onPressed: () => _handleLandlordVerification(landlord['id'], false),
+                  onPressed: () => _handleLandlordVerification(landlordId, false),
                   icon: const Icon(Icons.close, size: 16),
                   label: const Text('Reject'),
                   style: ElevatedButton.styleFrom(
@@ -454,7 +1193,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () => _handleLandlordVerification(landlord['id'], true),
+                  onPressed: () => _handleLandlordVerification(landlordId, true),
                   icon: const Icon(Icons.check, size: 16),
                   label: const Text('Approve'),
                   style: ElevatedButton.styleFrom(
@@ -471,6 +1210,9 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }
 
   Widget _buildPropertyCard(Map<String, dynamic> property) {
+    final propertyId = _getSafeInt(property['id']);
+    if (propertyId == 0) return const SizedBox.shrink();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -482,7 +1224,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: Colors.green.withOpacity(0.1),
+                  backgroundColor: Colors.green.withValues(alpha: 0.1),
                   child: const Icon(Icons.home_work, color: Colors.green),
                 ),
                 const SizedBox(width: 12),
@@ -491,11 +1233,11 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        property['address'] ?? 'Unknown Address',
+                        _getSafeString(property['address'], 'Unknown Address'),
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        'Requested by: ${property['landlord_name'] ?? 'Unknown'}',
+                        'Requested by: ${_getSafeString(property['landlord_name'], 'Unknown')}',
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -504,15 +1246,17 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               ],
             ),
             const SizedBox(height: 12),
-            Text('City: ${property['city'] ?? 'Not provided'}'),
-            Text('Postal Code: ${property['postal_code'] ?? 'Not provided'}'),
-            Text('Landlord Email: ${property['landlord_email'] ?? 'Not provided'}'),
+            Text('City: ${_getSafeString(property['city'], 'Not provided')}'),
+            Text('Postal Code: ${_getSafeString(property['postal_code'], 'Not provided')}'),
+            Text('Landlord Email: ${_getSafeString(property['landlord_email'], 'Not provided')}'),
+            if (_getSafeString(property['street']).isNotEmpty && _getSafeString(property['street']) != 'N/A')
+              Text('Street: ${property['street']}'),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 ElevatedButton.icon(
-                  onPressed: () => _handlePropertyRequest(property['id'], false),
+                  onPressed: () => _handlePropertyRequest(propertyId, false),
                   icon: const Icon(Icons.close, size: 16),
                   label: const Text('Reject'),
                   style: ElevatedButton.styleFrom(
@@ -522,7 +1266,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () => _handlePropertyRequest(property['id'], true),
+                  onPressed: () => _handlePropertyRequest(propertyId, true),
                   icon: const Icon(Icons.check, size: 16),
                   label: const Text('Approve'),
                   style: ElevatedButton.styleFrom(
@@ -546,7 +1290,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 6,
             offset: const Offset(0, 3),

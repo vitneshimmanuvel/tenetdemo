@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '/constants/auth_service.dart';
+import '/screens/user_preferences.dart';
 import 'admin_dashboard.dart';
+import 'verify_otp_screen.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -37,6 +39,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       );
 
       if (response['success'] == true && response['admin'] != null) {
+        // Save admin data to preferences
+        await UserPreferences.saveUser(response['admin']);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(response['message'] ?? 'Login successful')),
@@ -49,14 +54,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['message'] ?? 'Login failed')),
+            SnackBar(
+              content: Text(response['message'] ?? 'Login failed'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e')),
+          SnackBar(
+            content: Text('Login failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -76,9 +87,23 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       return;
     }
 
+    // Check if email contains 'alfa' (matching backend validation)
     if (!emailLower.contains('alfa')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('')),
+        const SnackBar(
+          content: Text('Invalid admin email. Email must contain "alfa".'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 6 characters long'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -95,30 +120,52 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       if (response['success'] == true) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['message'] ?? 'Registration successful')),
+            SnackBar(
+              content: Text(response['message'] ?? 'OTP sent to your email'),
+              backgroundColor: Colors.green,
+            ),
           );
-          // Navigate directly to dashboard after successful registration
-          Navigator.pushReplacement(
+
+          // Navigate to OTP verification screen with admin_register purpose
+          Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+            MaterialPageRoute(
+              builder: (context) => VerifyOtpScreen(
+                email: emailLower,
+                purpose: 'admin_register',
+              ),
+            ),
           );
         }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['message'] ?? 'Registration failed')),
+            SnackBar(
+              content: Text(response['message'] ?? 'Registration failed'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration failed: $e')),
+          SnackBar(
+            content: Text('Registration failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  void _clearFields() {
+    _nameController.clear();
+    _emailController.clear();
+    _passwordController.clear();
+    _registerPasswordController.clear();
   }
 
   @override
@@ -166,6 +213,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
                   const SizedBox(height: 32),
 
+                  // Registration fields
                   if (_isRegisterMode) ...[
                     TextField(
                       controller: _nameController,
@@ -184,6 +232,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     const SizedBox(height: 20),
                   ],
 
+                  // Email field
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -199,10 +248,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: adminColor, width: 2),
                       ),
+                      errorText: _isRegisterMode &&
+                          _emailController.text.isNotEmpty &&
+                          !_emailController.text.toLowerCase().contains('alfa')
+                          ? 'Email must contain "alfa"'
+                          : null,
                     ),
+                    onChanged: (_) => setState(() {}), // Rebuild to show/hide error
                   ),
                   const SizedBox(height: 20),
 
+                  // Password field
                   TextField(
                     controller: _isRegisterMode ? _registerPasswordController : _passwordController,
                     obscureText: true,
@@ -216,10 +272,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: adminColor, width: 2),
                       ),
+                      errorText: _isRegisterMode &&
+                          _registerPasswordController.text.isNotEmpty &&
+                          _registerPasswordController.text.length < 6
+                          ? 'Password must be at least 6 characters'
+                          : null,
                     ),
+                    onChanged: (_) => setState(() {}), // Rebuild to show/hide error
                   ),
                   const SizedBox(height: 32),
 
+                  // Action button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -245,22 +308,23 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Toggle button
                   TextButton(
                     onPressed: () {
                       setState(() {
                         _isRegisterMode = !_isRegisterMode;
-                        _nameController.clear();
-                        _emailController.clear();
-                        _passwordController.clear();
-                        _registerPasswordController.clear();
+                        _clearFields();
                       });
                     },
                     child: Text(
-                      _isRegisterMode ? 'Already have an account? Login' : 'Need to register? Create Account',
+                      _isRegisterMode
+                          ? 'Already have an account? Login'
+                          : 'Need to register? Create Account',
                       style: TextStyle(color: adminColor),
                     ),
                   ),
 
+                  // Warning for registration
                   if (_isRegisterMode) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -270,10 +334,20 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.amber[300]!),
                       ),
-                      child: const Text(
-                        '⚠️ Admin registration is restricted to authorized personnel only.',
-                        style: TextStyle(fontSize: 12, color: Colors.black87),
-                        textAlign: TextAlign.center,
+                      child: Column(
+                        children: [
+                          const Text(
+                            '⚠️ Admin registration is restricted to authorized personnel only.',
+                            style: TextStyle(fontSize: 12, color: Colors.black87),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'After registration, you will receive an OTP for verification.',
+                            style: TextStyle(fontSize: 11, color: Colors.black54),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   ],
