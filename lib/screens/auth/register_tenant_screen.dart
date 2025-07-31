@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '/constants/auth_service.dart';
-import '../dashboard/tenant_dashboard.dart';
 import '/screens/user_preferences.dart';
+import 'input_functions.dart';
+import 'verify_otp_screen.dart';
+import 'Login.dart';
 
 class RegisterTenantScreen extends StatefulWidget {
   const RegisterTenantScreen({super.key});
@@ -12,48 +14,113 @@ class RegisterTenantScreen extends StatefulWidget {
 }
 
 class _RegisterTenantScreenState extends State<RegisterTenantScreen> {
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  final Color _primaryColor = const Color(0xFF2E7D32);
+  final Color _primaryColor = const Color(0xFF4CAF50);
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  @override
+  void dispose() {
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _register() async {
     if (_formKey.currentState!.validate()) {
-      if (_passwordController.text != _confirmPasswordController.text) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Passwords do not match')),
-        );
-        return;
-      }
-
       setState(() => _isLoading = true);
 
       try {
+        // Format names properly
+        String firstName = InputFunctions.formatName(_firstNameController.text);
+        String lastName = InputFunctions.formatName(_lastNameController.text);
+        String fullName = lastName.isNotEmpty ? '$firstName $lastName' : firstName;
+
+        // Format email
+        String email = InputFunctions.formatEmail(_emailController.text);
+
+        // Clean phone number (remove formatting)
+        String phone = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+
+        print('🚀 Starting tenant registration for: $fullName ($email)');
+
         final response = await AuthService.registerTenant(
-          name: _nameController.text,
-          email: _emailController.text,
-          phone: _phoneController.text,
+          name: fullName,
+          email: email,
+          phone: phone,
           password: _passwordController.text,
         );
 
-        // Save user data to shared preferences
-        await UserPreferences.saveUser(response['user']);
+        print('📥 Registration API Response: $response');
 
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const TenantDashboard()),
+        if (!mounted) return;
+
+        if (response['success'] == true) {
+          print('✅ Registration successful, proceeding to OTP');
+
+          await UserPreferences.saveTempUserData({
+            'name': fullName,
+            'email': email,
+            'phone': phone,
+            'role': 'tenant',
+            'tenantId': response['tenantId'],
+          });
+
+          _showSuccessSnackBar(
+              response['message'] ?? 'Registration successful! Please check your email for OTP verification.',
+              const Color(0xFF4CAF50)
           );
+
+          await Future.delayed(const Duration(milliseconds: 800));
+
+          if (mounted) {
+            await Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VerifyOtpScreen(
+                  email: email,
+                  purpose: 'tenant_register',
+                  userRole: 'tenant',
+                ),
+              ),
+            );
+          }
+        } else {
+          String errorMessage = response['message'] ?? 'Registration failed. Please try again.';
+          Color errorColor = Colors.red;
+
+          if (errorMessage.toLowerCase().contains('email already') ||
+              errorMessage.toLowerCase().contains('already registered') ||
+              errorMessage.toLowerCase().contains('already exists')) {
+            errorColor = Colors.orange;
+            errorMessage = 'This email is already registered. Please use a different email or login instead.';
+            _showErrorWithLoginOption(errorMessage);
+            return;
+          }
+
+          _showErrorSnackBar(errorMessage, errorColor);
         }
       } catch (e) {
+        print('💥 Registration Exception: $e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Registration failed: $e')),
-          );
+          String errorMessage = 'Registration failed. Please try again.';
+          if (e.toString().contains('email already exists') ||
+              e.toString().contains('already registered')) {
+            _showErrorWithLoginOption('This email is already registered. Please use a different email or login instead.');
+            return;
+          }
+          _showErrorSnackBar(errorMessage, Colors.red);
         }
       } finally {
         if (mounted) {
@@ -63,170 +130,335 @@ class _RegisterTenantScreenState extends State<RegisterTenantScreen> {
     }
   }
 
+  void _showErrorSnackBar(String message, Color backgroundColor) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              backgroundColor == Colors.orange ? Icons.warning : Icons.error,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: backgroundColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _showErrorWithLoginOption(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.warning, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    );
+                  },
+                  child: const Text(
+                    'Go to Login',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message, Color backgroundColor) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF4CAF50),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(milliseconds: 2000),
+        margin: const EdgeInsets.all(16),
+        elevation: 6,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          decoration: const BoxDecoration(
-            color: Color(0xFFC9D4CB),
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: IconButton(
-                    icon: Icon(Icons.arrow_back, color: _primaryColor),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [_primaryColor, const Color(0xFF4CAF50)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        shape: BoxShape.circle,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFE8F5E8),
+                  Color(0xFFF1F8E9),
+                ],
+              ),
+            ),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      child: const Icon(
-                        Icons.apartment,
-                        size: 60,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Create Tenant Account',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: _primaryColor,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Complete your registration details',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 36),
-                _buildInputField(
-                  controller: _nameController,
-                  label: 'Full Name',
-                  icon: Icons.person_outline,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                _buildInputField(
-                  controller: _emailController,
-                  label: 'Email Address',
-                  icon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                      return 'Enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                _buildInputField(
-                  controller: _phoneController,
-                  label: 'Phone Number',
-                  icon: Icons.phone_outlined,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone';
-                    }
-                    if (value.length < 10) {
-                      return 'Enter a valid phone number';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                _buildPasswordField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                _buildPasswordField(
-                  controller: _confirmPasswordController,
-                  label: 'Confirm Password',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please confirm your password';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 40),
-                _buildActionButton(),
-                const SizedBox(height: 32),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text.rich(
-                    TextSpan(
-                      text: 'By registering, you agree to our ',
-                      style: TextStyle(
-                        color: Colors.grey[700],
-                        fontSize: 14,
-                      ),
-                      children: [
-                        TextSpan(
-                          text: 'Terms of Service',
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                          );
+                        },
+                        child: Text(
+                          'Already have account?',
                           style: TextStyle(
                             color: _primaryColor,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const TextSpan(text: ' and '),
-                        TextSpan(
-                          text: 'Privacy Policy',
-                          style: TextStyle(
-                            color: _primaryColor,
-                            fontWeight: FontWeight.w600,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [_primaryColor, const Color(0xFF66BB6A)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: _primaryColor.withOpacity(0.3),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.home,
+                          size: 60,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Create Tenant Account',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: _primaryColor,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Join our community of trusted tenants',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 36),
+
+                  // Name fields row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InputFunctions.buildInputField(
+                          controller: _firstNameController,
+                          label: 'First Name',
+                          icon: Icons.person_outline,
+                          primaryColor: _primaryColor,
+                          inputFormatters: [InputFunctions.nameInputFormatter],
+                          textCapitalization: TextCapitalization.words,
+                          validator: (value) => InputFunctions.validateName(value, fieldName: 'First name'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: InputFunctions.buildInputField(
+                          controller: _lastNameController,
+                          label: 'Last Name',
+                          icon: Icons.person_outline,
+                          primaryColor: _primaryColor,
+                          inputFormatters: [InputFunctions.nameInputFormatter],
+                          textCapitalization: TextCapitalization.words,
+                          validator: (value) {
+                            if (value != null && value.isNotEmpty) {
+                              return InputFunctions.validateName(value, fieldName: 'Last name');
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Email field
+                  InputFunctions.buildInputField(
+                    controller: _emailController,
+                    label: 'Email Address',
+                    icon: Icons.email_outlined,
+                    primaryColor: _primaryColor,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: InputFunctions.validateEmail,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Phone field
+                  InputFunctions.buildInputField(
+                    controller: _phoneController,
+                    label: 'Phone Number',
+                    icon: Icons.phone_outlined,
+                    primaryColor: _primaryColor,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      InputFunctions.phoneInputFormatter,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    validator: InputFunctions.validatePhone,
+                    onChanged: (value) {
+                      // Optional: Auto-format phone number
+                      if (value.length == 10) {
+                        _phoneController.value = TextEditingValue(
+                          text: InputFunctions.formatPhone(value),
+                          selection: TextSelection.collapsed(offset: InputFunctions.formatPhone(value).length),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Password field
+                  InputFunctions.buildPasswordField(
+                    controller: _passwordController,
+                    label: 'Password',
+                    obscureText: _obscurePassword,
+                    onToggleVisibility: () {
+                      setState(() => _obscurePassword = !_obscurePassword);
+                    },
+                    primaryColor: _primaryColor,
+                    validator: InputFunctions.validatePassword,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Confirm password field
+                  InputFunctions.buildPasswordField(
+                    controller: _confirmPasswordController,
+                    label: 'Confirm Password',
+                    obscureText: _obscureConfirmPassword,
+                    onToggleVisibility: () {
+                      setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                    },
+                    primaryColor: _primaryColor,
+                    validator: (value) => InputFunctions.validateConfirmPassword(value, _passwordController.text),
+                  ),
+                  const SizedBox(height: 40),
+
+                  // Register button
+                  _buildRegisterButton(),
+                  const SizedBox(height: 32),
+
+                  // Info box
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _primaryColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, color: _primaryColor),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'After registration, you will receive an OTP via email to verify your account and gain immediate access.',
+                            style: TextStyle(
+                              color: _primaryColor.withOpacity(0.8),
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -234,104 +466,46 @@ class _RegisterTenantScreenState extends State<RegisterTenantScreen> {
     );
   }
 
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: const TextStyle(
-        color: Colors.black87,
-        fontSize: 16,
+  Widget _buildRegisterButton() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: _primaryColor.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          color: Colors.grey[700],
-          fontSize: 16,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _register,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primaryColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+          disabledBackgroundColor: _primaryColor.withOpacity(0.6),
         ),
-        prefixIcon: Icon(icon, color: _primaryColor),
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _primaryColor, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-        errorStyle: const TextStyle(fontSize: 14),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String label,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: true,
-      validator: validator,
-      style: const TextStyle(
-        color: Colors.black87,
-        fontSize: 16,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          color: Colors.grey[700],
-          fontSize: 16,
-        ),
-        prefixIcon: Icon(Icons.lock_outline, color: _primaryColor),
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _primaryColor, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-      ),
-    );
-  }
-
-  Widget _buildActionButton() {
-    return ElevatedButton(
-      onPressed: _isLoading ? null : _register,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        elevation: 3,
-        shadowColor: _primaryColor.withOpacity(0.4),
-      ),
-      child: _isLoading
-          ? const SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(color: Colors.white),
-      )
-          : const Text(
-        'CONTINUE',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.8,
+        child: _isLoading
+            ? const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2,
+          ),
+        )
+            : const Text(
+          'CREATE ACCOUNT',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.8,
+          ),
         ),
       ),
     );

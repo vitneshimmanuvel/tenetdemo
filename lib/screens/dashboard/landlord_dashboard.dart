@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import ' search_tenant.dart';
 import 'propertiesopp.dart';
 import '/screens/user_preferences.dart';
+import '/constants/auth_service.dart';
+import '../auth/login.dart';
+import '/screens/logout_helper.dart'; // Add this import
 
 class LandlordDashboard extends StatefulWidget {
   const LandlordDashboard({super.key});
@@ -15,6 +18,9 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, dynamic>? _user;
   bool _isLoading = true;
+  bool _isAddingProperty = false;
+  List<Map<String, dynamic>> _properties = [];
+  List<Map<String, dynamic>> _searchHistory = [];
 
   @override
   void initState() {
@@ -28,6 +34,77 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
       _user = user;
       _isLoading = false;
     });
+
+    // Load fresh data from server
+    if (user != null && user['id'] != null) {
+      await _refreshProfile();
+      await _loadProperties();
+      await _loadSearchHistory();
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    if (_user == null || _user!['id'] == null) return;
+
+    try {
+      final result = await AuthService.getLandlordProfile(_user!['id']);
+      if (result['success'] == true && result['profile'] != null) {
+        final profile = Map<String, dynamic>.from(result['profile'] as Map);
+        final updatedUser = {
+          ..._user!,
+          ...profile,
+        };
+        await UserPreferences.saveUser(updatedUser);
+        setState(() {
+          _user = updatedUser;
+        });
+      }
+    } catch (e) {
+      print('Error refreshing profile: $e');
+    }
+  }
+
+  Future<void> _loadProperties() async {
+    if (_user == null || _user!['id'] == null) return;
+
+    try {
+      final result = await AuthService.getLandlordProperties(_user!['id']);
+      if (result['success'] == true) {
+        setState(() {
+          _properties = List<Map<String, dynamic>>.from(result['properties'] ?? []);
+        });
+      }
+    } catch (e) {
+      print('Error loading properties: $e');
+    }
+  }
+
+  double _getSafeRating(dynamic rating) {
+    if (rating == null) return 0.0;
+    if (rating is double) return rating;
+    if (rating is int) return rating.toDouble();
+    if (rating is String) return double.tryParse(rating) ?? 0.0;
+    return 0.0;
+  }
+
+  String _getSafeString(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
+  }
+
+  Future<void> _loadSearchHistory() async {
+    if (_user == null || _user!['id'] == null) return;
+
+    try {
+      final result = await AuthService.getSearchHistory(_user!['id']);
+      if (result['success'] == true) {
+        setState(() {
+          _searchHistory = List<Map<String, dynamic>>.from(result['searchHistory'] ?? []);
+        });
+      }
+    } catch (e) {
+      print('Error loading search history: $e');
+    }
   }
 
   void _showProfileDrawer() {
@@ -35,6 +112,11 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
   }
 
   void _showAddPropertyDialog() {
+    if (_user == null) {
+      _showErrorSnackBar('User not found. Please login again.');
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -48,7 +130,13 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
           title: const Text("Add Property", style: TextStyle(color: Color(0xFF5B4FD5))),
           content: SingleChildScrollView(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                const Text(
+                  "Your property will be sent for admin approval",
+                  style: TextStyle(color: Colors.orange, fontSize: 12),
+                ),
+                const SizedBox(height: 15),
                 TextField(
                   controller: addressController,
                   decoration: InputDecoration(
@@ -62,7 +150,7 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
                   controller: streetController,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.streetview),
-                    hintText: "Street",
+                    hintText: "Street (Optional)",
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
@@ -81,14 +169,10 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: pincodeController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
-                  ],
+                  keyboardType: TextInputType.text,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.pin),
-                    hintText: "Pincode",
+                    prefixIcon: const Icon(Icons.local_post_office),
+                    hintText: "Postal Code",
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
@@ -96,16 +180,50 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancel"),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF5B4FD5),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              onPressed: () {
+              onPressed: () async {
+                if (addressController.text.isEmpty ||
+                    cityController.text.isEmpty ||
+                    pincodeController.text.isEmpty) {
+                  _showErrorSnackBar('Please fill all required fields');
+                  return;
+                }
+
+                setState(() => _isAddingProperty = true);
+
+                final result = await AuthService.addProperty(
+                  landlordId: _user!['id'],
+                  address: addressController.text.trim(),
+                  street: streetController.text.trim(),
+                  city: cityController.text.trim(),
+                  postalCode: pincodeController.text.trim(),
+                );
+
+                setState(() => _isAddingProperty = false);
                 Navigator.of(context).pop();
-                // Save property logic
+
+                if (result['success'] == true) {
+                  _showSuccessSnackBar(result['message'] ?? 'Property request submitted for approval');
+                  await _loadProperties();
+                } else {
+                  _showErrorSnackBar(result['message'] ?? 'Failed to add property');
+                }
               },
-              child: const Text("Register", style: TextStyle(color: Colors.white)),
+              child: _isAddingProperty
+                  ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+              )
+                  : const Text("Submit for Approval", style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -113,87 +231,33 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
     );
   }
 
-  void _showEditProfileDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        TextEditingController nameController = TextEditingController(text: _user?['name'] ?? '');
-        TextEditingController addressController = TextEditingController(
-            text: _user?['address'] ?? '');
-        TextEditingController emailController = TextEditingController(
-            text: _user?['email'] ?? '');
-        TextEditingController phoneController = TextEditingController(
-            text: _user?['phone'] ?? '');
-
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Edit Profile", style: TextStyle(color: Color(0xFF5B4FD5))),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  controller: nameController,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z ]'))
-                  ],
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.person),
-                    hintText: "Name",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: addressController,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.home),
-                    hintText: "Address",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.email),
-                    hintText: "Email",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(10),
-                  ],
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.phone),
-                    hintText: "Phone Number",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF5B4FD5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Save profile logic
-              },
-              child: const Text("Save", style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // Updated logout methods using LogoutHelper
+  void _showLogoutDialog() {
+    LogoutHelper.showLogoutDialog(context);
+  }
+
+  void _logout() {
+    LogoutHelper.logout(context);
   }
 
   @override
@@ -204,74 +268,131 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
       );
     }
 
+    if (_user == null) {
+      return const Scaffold(
+        body: Center(child: Text('User not found. Please login again.')),
+      );
+    }
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.white,
+      // Optional: Add logout to AppBar
+      appBar: AppBar(
+        title: const Text('Landlord Dashboard'),
+        backgroundColor: const Color(0xFF5B4FD5),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _showLogoutDialog, // Shows confirmation dialog
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
       endDrawer: Drawer(
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.horizontal(left: Radius.circular(30)),
         ),
         child: Container(
           color: Colors.white,
-          padding: const EdgeInsets.all(20),
-          child: Column(
+          child: ListView(
+            padding: EdgeInsets.zero,
             children: [
-              const CircleAvatar(
-                radius: 40,
-                backgroundColor: Color(0xFF5B4FD5),
-                child: Icon(Icons.person, size: 40, color: Colors.white),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _user?['name'] ?? 'Name',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.home, color: Color(0xFF5B4FD5)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(_user?['address'] ?? 'Address'),
+              DrawerHeader(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF5B4FD5), Color(0xFF9F95EC)],
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.email, color: Color(0xFF5B4FD5)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(_user?['email'] ?? 'Email'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.phone, color: Color(0xFF5B4FD5)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(_user?['phone'] ?? 'Phone'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: const [
-                  Icon(Icons.notifications_active, color: Color(0xFF5B4FD5)),
-                  SizedBox(width: 10),
-                  Expanded(child: Text("Notifications enabled")),
-                ],
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5B4FD5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.only(topLeft: Radius.circular(30)),
                 ),
-                onPressed: _showEditProfileDialog,
-                child: const Text("Edit Profile", style: TextStyle(color: Colors.white)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.person, size: 35, color: Color(0xFF5B4FD5)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _user!['name'] ?? 'Landlord',
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      _user!['email'] ?? '',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.account_circle, color: Color(0xFF5B4FD5)),
+                title: const Text('Profile'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showProfileDialog();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.home, color: Color(0xFF5B4FD5)),
+                title: const Text('My Properties'),
+                trailing: Text('${_properties.length}'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PropertiesOpp(
+                        properties: _properties,
+                        landlordId: _user!['id'],
+                      ),
+                    ),
+                  ).then((_) => _loadProperties());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.search, color: Color(0xFF5B4FD5)),
+                title: const Text('Search Tenants'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SearchTenant(landlordId: _user!['id']),
+                    ),
+                  ).then((_) => _loadSearchHistory());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.history, color: Color(0xFF5B4FD5)),
+                title: const Text('Search History'),
+                trailing: Text('${_searchHistory.length}'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showSearchHistoryDialog();
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.refresh, color: Color(0xFF5B4FD5)),
+                title: const Text('Refresh Data'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _refreshAllData();
+                },
+              ),
+              // Updated logout ListTile using LogoutHelper
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.red),
+                title: const Text('Logout'),
+                onTap: () {
+                  Navigator.pop(context); // Close drawer first
+                  _showLogoutDialog(); // Then show logout dialog
+                },
               ),
             ],
           ),
@@ -279,6 +400,7 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
       ),
       body: Stack(
         children: [
+          // Decorative circles from second design
           Positioned(
             top: -30,
             right: -30,
@@ -315,11 +437,13 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
               ),
             ),
           ),
+          // Main content
           Positioned.fill(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  const SizedBox(height: 200),
+                  const SizedBox(height: 150),
+                  // Profile section - centered like in second design
                   GestureDetector(
                     onTap: _showProfileDrawer,
                     child: Container(
@@ -359,7 +483,8 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 100),
+                  const SizedBox(height: 80),
+                  // Action buttons section
                   Container(
                     height: 300,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -371,13 +496,24 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
                     child: Column(
                       children: [
                         _buildButton(context, 'Search Tenant', Icons.search, () {
-                          Navigator.push(context,
-                              MaterialPageRoute(builder: (context) => const SearchTenant()));
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SearchTenant(landlordId: _user!['id']),
+                            ),
+                          ).then((_) => _loadSearchHistory());
                         }),
                         const SizedBox(height: 20),
                         _buildButton(context, 'My Properties', Icons.home, () {
-                          Navigator.push(context,
-                              MaterialPageRoute(builder: (context) => const PropertiesOpp()));
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PropertiesOpp(
+                                properties: _properties,
+                                landlordId: _user!['id'],
+                              ),
+                            ),
+                          ).then((_) => _loadProperties());
                         }),
                         const SizedBox(height: 30),
                         GestureDetector(
@@ -403,6 +539,7 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 30),
                 ],
               ),
             ),
@@ -449,5 +586,154 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
         ),
       ),
     );
+  }
+
+  // All the dialog methods from the first file
+  void _showProfileDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Profile Information", style: TextStyle(color: Color(0xFF5B4FD5))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _profileInfoRow("Name", _user!['name'] ?? 'N/A'),
+              _profileInfoRow("Email", _user!['email'] ?? 'N/A'),
+              _profileInfoRow("Phone", _user!['phone'] ?? 'N/A'),
+              _profileInfoRow("Address", _user!['address'] ?? 'N/A'),
+              _profileInfoRow("City", _user!['city'] ?? 'N/A'),
+              _profileInfoRow("Postal Code", _user!['postalCode'] ?? 'N/A'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    _user!['verified'] == true ? Icons.verified : Icons.pending,
+                    color: _user!['verified'] == true ? Colors.green : Colors.orange,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    _user!['verified'] == true ? 'Verified' : 'Pending Verification',
+                    style: TextStyle(
+                      color: _user!['verified'] == true ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  Icon(
+                    _user!['adminApproved'] == true ? Icons.admin_panel_settings : Icons.pending_actions,
+                    color: _user!['adminApproved'] == true ? Colors.green : Colors.orange,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    _user!['adminApproved'] == true ? 'Admin Approved' : 'Pending Admin Approval',
+                    style: TextStyle(
+                      color: _user!['adminApproved'] == true ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _profileInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              "$label:",
+              style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.grey),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSearchHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Recent Searches", style: TextStyle(color: Color(0xFF5B4FD5))),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: _searchHistory.isEmpty
+                ? const Center(child: Text('No search history yet'))
+                : ListView.builder(
+              itemCount: _searchHistory.length,
+              itemBuilder: (context, index) {
+                final tenant = _searchHistory[index];
+                final averageRating = _getSafeRating(tenant['average_rating']);
+                return ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF5B4FD5),
+                    child: Icon(Icons.person, color: Colors.white),
+                  ),
+                  title: Text(_getSafeString(tenant['name']).isEmpty ? 'Unknown' : _getSafeString(tenant['name'])),
+                  subtitle: Text(_getSafeString(tenant['tenancy_id'])),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
+                      Text(
+                        averageRating > 0 ? averageRating.toStringAsFixed(1) : 'N/A',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _refreshAllData() async {
+    setState(() => _isLoading = true);
+    await _refreshProfile();
+    await _loadProperties();
+    await _loadSearchHistory();
+    setState(() => _isLoading = false);
+    _showSuccessSnackBar('Data refreshed successfully');
   }
 }

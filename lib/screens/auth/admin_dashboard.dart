@@ -297,14 +297,92 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Tenant Info
-                      _buildDetailRow('Name', _getSafeString(tenant['name'])),
-                      _buildDetailRow('Email', _getSafeString(tenant['email'])),
-                      _buildDetailRow('Phone', _getSafeString(tenant['phone'])),
-                      _buildDetailRow('Tenancy ID', _getSafeString(tenant['tenancy_id'])),
-                      _buildDetailRow('Joined', _formatDate(_getSafeString(tenant['created_at']))),
+                      // Tenant Basic Info Card
+                      Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Basic Information',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildDetailRow('Name', _getSafeString(tenant['name'])),
+                              _buildDetailRow('Email', _getSafeString(tenant['email'])),
+                              _buildDetailRow('Phone', _getSafeString(tenant['phone'])),
+                              _buildDetailRow('Tenancy ID', _getSafeString(tenant['tenancy_id'])),
+                              _buildDetailRow('Joined', _formatDate(_getSafeString(tenant['created_at']))),
+                              _buildDetailRow(
+                                  'Status',
+                                  _getSafeString(tenant['verified']) == 'true' ? 'Verified' : 'Unverified'
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+
+                      // Rating Summary Card
+                      if (_getSafeInt(tenant['total_ratings']) > 0) ...[
+                        Card(
+                          elevation: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Rating Summary',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildRatingSummaryItem(
+                                        'Overall Rating',
+                                        _getSafeDouble(tenant['average_rating']).toStringAsFixed(1),
+                                        Icons.star,
+                                        _getRatingColor(tenant['average_rating']),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildRatingSummaryItem(
+                                        'Total Ratings',
+                                        _getSafeInt(tenant['total_ratings']).toString(),
+                                        Icons.rate_review,
+                                        Colors.blue,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                _buildDetailRow('Rent Payment', '${_getSafeDouble(tenant['avg_rent_payment']).toStringAsFixed(1)}/5'),
+                                _buildDetailRow('Communication', '${_getSafeDouble(tenant['avg_communication']).toStringAsFixed(1)}/5'),
+                                _buildDetailRow('Property Care', '${_getSafeDouble(tenant['avg_property_care']).toStringAsFixed(1)}/5'),
+                                _buildDetailRow('Utilities', '${_getSafeDouble(tenant['avg_utilities']).toStringAsFixed(1)}/5'),
+                                _buildDetailRow('Property Handover', '${_getSafeDouble(tenant['avg_property_handover']).toStringAsFixed(1)}/5'),
+                                _buildDetailRow('Respect Others', '${_getSafeDouble(tenant['respect_others_percentage']).toStringAsFixed(1)}%'),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Rating History Section
                       Text(
                         'Rating History (${ratings.length} ratings)',
                         style: const TextStyle(
@@ -316,12 +394,32 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
                       // Ratings List
                       if (ratings.isEmpty)
-                        const Center(
+                        Card(
                           child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text(
-                              'No ratings available',
-                              style: TextStyle(color: Colors.grey),
+                            padding: const EdgeInsets.all(32),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(Icons.rate_review_outlined, size: 48, color: Colors.grey[400]),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No ratings available',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'This tenant has not been rated by any landlord yet.',
+                                    style: TextStyle(
+                                      color: Colors.grey[500],
+                                      fontSize: 14,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         )
@@ -329,59 +427,183 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                         ...ratings.map((rating) {
                           final ratingMap = rating as Map<String, dynamic>;
                           return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            elevation: 1,
                             child: Padding(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Property and Rating Header
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          _getSafeString(ratingMap['address'], 'Property'),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              _getSafeString(ratingMap['property_address'], 'Property'),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${_getSafeString(ratingMap['property_city'])}, ${_getSafeString(ratingMap['property_postal_code'])}',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
+                                          horizontal: 12,
+                                          vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
                                           color: _getRatingColor(ratingMap['overall_rating']),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(16),
                                         ),
-                                        child: Text(
-                                          '${_getSafeInt(ratingMap['overall_rating'])}/5',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.star,
+                                              color: Colors.white,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${_getSafeDouble(ratingMap['overall_rating']).toStringAsFixed(1)}/5',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Landlord: ${_getSafeString(ratingMap['landlord_name'])}',
-                                    style: TextStyle(color: Colors.grey[600]),
-                                  ),
-                                  Text(
-                                    'Date: ${_formatDate(_getSafeString(ratingMap['created_at']))}',
-                                    style: TextStyle(color: Colors.grey[600]),
-                                  ),
-                                  if (_getSafeString(ratingMap['comments']).isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 8),
-                                      child: Text(
-                                        'Comments: ${ratingMap['comments']}',
+
+                                  const SizedBox(height: 12),
+
+                                  // Landlord and Date Info
+                                  Row(
+                                    children: [
+                                      Icon(Icons.person, size: 16, color: Colors.grey[600]),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Landlord: ${_getSafeString(ratingMap['landlord_name'])}',
                                         style: TextStyle(color: Colors.grey[700]),
                                       ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Rated: ${_formatDate(_getSafeString(ratingMap['created_at']))}',
+                                        style: TextStyle(color: Colors.grey[700]),
+                                      ),
+                                    ],
+                                  ),
+
+                                  // Stay Period
+                                  if (_getSafeString(ratingMap['stay_period_start']).isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.date_range, size: 16, color: Colors.grey[600]),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Stay: ${_formatDate(_getSafeString(ratingMap['stay_period_start']))} - ${_getSafeString(ratingMap['stay_period_end']).isNotEmpty ? _formatDate(_getSafeString(ratingMap['stay_period_end'])) : 'Current'}',
+                                          style: TextStyle(color: Colors.grey[700]),
+                                        ),
+                                      ],
                                     ),
+                                  ],
+
+                                  // Detailed Ratings
+                                  const SizedBox(height: 12),
+                                  const Divider(),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Detailed Ratings:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildRatingDetailRow('Rent Payment', _getSafeInt(ratingMap['rent_payment'])),
+                                  _buildRatingDetailRow('Communication', _getSafeInt(ratingMap['communication'])),
+                                  _buildRatingDetailRow('Property Care', _getSafeInt(ratingMap['property_care'])),
+                                  _buildRatingDetailRow('Utilities', _getSafeInt(ratingMap['utilities'])),
+                                  _buildRatingDetailRow('Property Handover', _getSafeInt(ratingMap['property_handover'])),
+
+                                  // Respect Others
+                                  if (ratingMap['respect_others'] != null) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text('Respect Others:', style: TextStyle(color: Colors.grey[700])),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: ratingMap['respect_others'] == true ? Colors.green : Colors.red,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            ratingMap['respect_others'] == true ? 'Yes' : 'No',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+
+                                  // Comments
+                                  if (_getSafeString(ratingMap['comments']).isNotEmpty) ...[
+                                    const SizedBox(height: 12),
+                                    const Divider(),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Comments:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[800],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[50],
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.grey[200]!),
+                                      ),
+                                      child: Text(
+                                        ratingMap['comments'],
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1322,4 +1544,62 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     _tabController.dispose();
     super.dispose();
   }
+}
+
+Widget _buildRatingSummaryItem(String title, String value, IconData icon, Color color) {
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
+    ),
+    child: Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
+}
+
+// Helper widget for detailed rating rows
+Widget _buildRatingDetailRow(String label, int rating) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          '$label:',
+          style: TextStyle(color: Colors.grey[700]),
+        ),
+        Row(
+          children: List.generate(5, (index) {
+            return Icon(
+              Icons.star,
+              size: 16,
+              color: index < rating ? Colors.amber : Colors.grey[300],
+            );
+          }),
+        ),
+      ],
+    ),
+  );
 }

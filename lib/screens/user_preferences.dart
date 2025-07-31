@@ -12,12 +12,14 @@ class UserPreferences {
     await prefs.setString(_userKey, jsonEncode(user));
     await prefs.setBool(_isLoggedInKey, true);
 
+
+
     // Save user type for easy access
     if (user['role'] != null) {
       await prefs.setString(_userTypeKey, user['role']);
     }
   }
-
+  
   // Get user data
   static Future<Map<String, dynamic>> getUser() async {
     final prefs = await SharedPreferences.getInstance();

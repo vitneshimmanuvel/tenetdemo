@@ -1,107 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '/constants/api_paths.dart';
-import '/screens/user_preferences.dart';
 
 class AuthService {
-  static Future<Map<String, dynamic>> registerLandlord({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String address,
-    required String postalCode,
-    required String city,
-  }) async {
-    try {
-      print('Starting landlord registration...'); // Debug log
-      print('API URL: ${ApiPaths.registerLandlord}'); // Debug log
-
-      final requestBody = {
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'address': address,
-        'postalCode': postalCode,
-        'city': city,
-      };
-
-      print('Request body: $requestBody'); // Debug log
-
-      final response = await http.post(
-        Uri.parse(ApiPaths.registerLandlord),
-        body: jsonEncode(requestBody),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      ).timeout(const Duration(seconds: 30));
-
-      print('Response status: ${response.statusCode}'); // Debug log
-      print('Response body: ${response.body}'); // Debug log
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return {
-          'success': true,
-          'message': data['message'] ?? 'OTP sent to your email',
-        };
-      } else {
-        return {
-          'success': false,
-          'message': data['error'] ?? 'Registration failed',
-        };
-      }
-    } catch (e) {
-      print('Registration error: $e'); // Debug log
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
-    }
-  }
-
-  static Future<Map<String, dynamic>> registerTenant({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse(ApiPaths.registerTenant),
-        body: jsonEncode({
-          'name': name,
-          'email': email,
-          'phone': phone,
-          'password': password,
-        }),
-        headers: {'Content-Type': 'application/json'},
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        return {
-          'success': true,
-          'message': data['message'],
-          'user': data['user'],
-        };
-      } else {
-        return {
-          'success': false,
-          'message': data['error'] ?? 'Registration failed',
-        };
-      }
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Network error: ${e.toString()}',
-      };
-    }
-  }
+  // =================== AUTHENTICATION ===================
 
   static Future<Map<String, dynamic>> login({
     required String email,
@@ -110,20 +12,20 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse(ApiPaths.login),
-        body: jsonEncode({
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'email': email,
           'password': password,
         }),
-        headers: {'Content-Type': 'application/json'},
-      );
+      ).timeout(const Duration(seconds: 30));
 
-      final data = jsonDecode(response.body);
+      final data = json.decode(response.body);
 
       if (response.statusCode == 200) {
         return {
           'success': true,
           'user': data['user'],
-          'message': data['message'],
+          'message': data['message'] ?? 'Login successful'
         };
       } else if (response.statusCode == 403) {
         return {
@@ -131,18 +33,18 @@ class AuthService {
           'requiresApproval': data['requiresApproval'] ?? false,
           'requiresVerification': data['requiresVerification'] ?? false,
           'isVerified': data['isVerified'] ?? false,
-          'message': data['error'] ?? 'Account access denied',
+          'message': data['error'] ?? 'Account access denied'
         };
       } else {
         return {
           'success': false,
-          'message': data['error'] ?? 'Login failed',
+          'message': data['error'] ?? 'Login failed'
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
@@ -152,34 +54,25 @@ class AuthService {
     required String purpose,
   }) async {
     try {
-      print('Sending OTP to: $email for purpose: $purpose'); // Debug log
-
       final response = await http.post(
         Uri.parse(ApiPaths.sendOtp),
-        body: jsonEncode({
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'email': email,
           'purpose': purpose,
         }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
       ).timeout(const Duration(seconds: 30));
 
-      print('OTP Response status: ${response.statusCode}'); // Debug log
-      print('OTP Response body: ${response.body}'); // Debug log
-
-      final data = jsonDecode(response.body);
+      final data = json.decode(response.body);
 
       return {
-        'success': response.statusCode == 200 && data['success'] == true,
-        'message': data['message'] ?? 'Failed to send OTP',
+        'success': response.statusCode == 200,
+        'message': data['message'] ?? 'Failed to send OTP'
       };
     } catch (e) {
-      print('Send OTP error: $e'); // Debug log
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
@@ -190,57 +83,40 @@ class AuthService {
     required String purpose,
   }) async {
     try {
-      print('Verifying OTP for: $email with purpose: $purpose'); // Debug log
-
       final response = await http.post(
         Uri.parse(ApiPaths.verifyOtp),
-        body: jsonEncode({
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'email': email,
           'otp': otp,
           'purpose': purpose,
         }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
       ).timeout(const Duration(seconds: 30));
 
-      print('Verify OTP Response status: ${response.statusCode}'); // Debug log
-      print('Verify OTP Response body: ${response.body}'); // Debug log
+      final data = json.decode(response.body);
 
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
+      if (response.statusCode == 200) {
         Map<String, dynamic> result = {
           'success': true,
-          'message': data['message'],
+          'message': data['message'] ?? 'OTP verified successfully'
         };
 
-        // Handle different purposes response data
-        if (data['resetToken'] != null) {
-          result['resetToken'] = data['resetToken'];
-        }
-
-        if (data['user'] != null) {
-          result['user'] = data['user'];
-        }
-
-        if (data['admin'] != null) {
-          result['admin'] = data['admin'];
-        }
+        // Add optional fields if they exist
+        if (data['resetToken'] != null) result['resetToken'] = data['resetToken'];
+        if (data['user'] != null) result['user'] = data['user'];
+        if (data['admin'] != null) result['admin'] = data['admin'];
 
         return result;
       } else {
         return {
           'success': false,
-          'message': data['message'] ?? 'OTP verification failed',
+          'message': data['message'] ?? 'OTP verification failed'
         };
       }
     } catch (e) {
-      print('Verify OTP error: $e'); // Debug log
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
@@ -253,29 +129,134 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse(ApiPaths.resetPassword),
-        body: jsonEncode({
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'email': email,
           'resetToken': resetToken,
           'newPassword': newPassword,
         }),
-        headers: {'Content-Type': 'application/json'},
-      );
+      ).timeout(const Duration(seconds: 30));
 
-      final data = jsonDecode(response.body);
+      final data = json.decode(response.body);
 
       return {
-        'success': response.statusCode == 200 && data['success'] == true,
-        'message': data['message'] ?? 'Password reset failed',
+        'success': response.statusCode == 200,
+        'message': data['message'] ?? 'Password reset failed'
       };
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
 
-  // ========== ADMIN METHODS ==========
+  // =================== REGISTRATION ===================
+
+  static Future<Map<String, dynamic>> registerLandlord({
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+    required String address,
+    required String postalCode,
+    required String city,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiPaths.registerLandlord),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'password': password,
+          'address': address,
+          'postalCode': postalCode,
+          'city': city,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Registration successful! OTP sent to your email'
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Registration failed'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> registerTenant({
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+  }) async {
+    try {
+      print('🔄 Making API call to register tenant...');
+
+      final response = await http.post(
+        Uri.parse(ApiPaths.registerTenant),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'password': password,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      print('📡 API Response Status: ${response.statusCode}');
+      print('📡 API Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        // Return the exact response from backend
+        return {
+          'success': data['success'] ?? false,
+          'message': data['message'] ?? 'Unknown response',
+          'tenantId': data['tenantId'], // Include tenantId if present
+        };
+      } else {
+        // Handle non-200/201 status codes
+        final data = json.decode(response.body);
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Registration failed. Server error.'
+        };
+      }
+    } catch (e) {
+      print('❌ Network error in registerTenant: $e');
+
+      String errorMessage = 'Network error. Please check your connection.';
+
+      if (e.toString().contains('timeout') || e.toString().contains('TimeoutException')) {
+        errorMessage = 'Request timeout. Please try again.';
+      } else if (e.toString().contains('connection') || e.toString().contains('SocketException')) {
+        errorMessage = 'Network connection failed. Please check your internet.';
+      }
+
+      return {
+        'success': false,
+        'message': errorMessage
+      };
+    }
+  }
+
+  // =================== ADMIN METHODS ===================
 
   static Future<Map<String, dynamic>> registerAdmin({
     required String name,
@@ -285,24 +266,24 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse(ApiPaths.adminRegister),
-        body: jsonEncode({
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'name': name,
           'email': email,
           'password': password,
         }),
-        headers: {'Content-Type': 'application/json'},
-      );
+      ).timeout(const Duration(seconds: 30));
 
-      final data = jsonDecode(response.body);
+      final data = json.decode(response.body);
 
       return {
-        'success': response.statusCode == 200 && data['success'] == true,
-        'message': data['message'] ?? 'Admin registration failed',
+        'success': response.statusCode == 200,
+        'message': data['message'] ?? 'Admin registration failed'
       };
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
@@ -314,223 +295,122 @@ class AuthService {
     try {
       final response = await http.post(
         Uri.parse(ApiPaths.adminLogin),
-        body: jsonEncode({
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'email': email,
           'password': password,
         }),
-        headers: {'Content-Type': 'application/json'},
-      );
+      ).timeout(const Duration(seconds: 30));
 
-      final data = jsonDecode(response.body);
+      final data = json.decode(response.body);
 
       if (response.statusCode == 200) {
         return {
           'success': true,
           'admin': data['admin'],
-          'message': data['message'],
+          'message': data['message'] ?? 'Admin login successful'
         };
       } else {
         return {
           'success': false,
-          'message': data['error'] ?? 'Admin login failed',
+          'message': data['error'] ?? 'Admin login failed'
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
 
   static Future<Map<String, dynamic>> getAdminStats() async {
     try {
-      print('Fetching admin stats from: ${ApiPaths.adminStats}');
-
       final response = await http.get(
         Uri.parse(ApiPaths.adminStats),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('Stats response status: ${response.statusCode}');
-      print('Stats response body: ${response.body}');
-
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Ensure we have proper integer values
+        final data = json.decode(response.body);
         return {
+          'success': true,
           'totalTenants': _parseToInt(data['totalTenants']),
           'totalLandlords': _parseToInt(data['totalLandlords']),
           'totalProperties': _parseToInt(data['totalProperties']),
         };
       } else {
-        print('Stats API error: ${response.statusCode} - ${response.body}');
         throw Exception('Failed to get stats: ${response.statusCode}');
       }
     } catch (e) {
-      print('Get admin stats error: $e');
-      // Return default values on error
       return {
+        'success': false,
         'totalTenants': 0,
         'totalLandlords': 0,
         'totalProperties': 0,
+        'message': 'Failed to load stats: $e'
       };
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getPendingLandlords() async {
-    try {
-      print('Fetching pending landlords from: ${ApiPaths.adminPendingLandlords}');
-
-      final response = await http.get(
-        Uri.parse(ApiPaths.adminPendingLandlords),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
-
-      print('Pending landlords response status: ${response.statusCode}');
-      print('Pending landlords response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Safely handle the landlords array
-        if (data is Map<String, dynamic> && data['landlords'] is List) {
-          return List<Map<String, dynamic>>.from(
-              data['landlords'].map((item) => Map<String, dynamic>.from(item))
-          );
-        } else {
-          print('Unexpected response format for pending landlords');
-          return [];
-        }
-      } else {
-        print('Pending landlords API error: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to get pending landlords: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Get pending landlords error: $e');
-      return [];
-    }
-  }
-
-  static Future<List<Map<String, dynamic>>> getPendingProperties() async {
-    try {
-      print('Fetching pending properties from: ${ApiPaths.adminPendingProperties}');
-
-      final response = await http.get(
-        Uri.parse(ApiPaths.adminPendingProperties),
-        headers: {'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
-
-      print('Pending properties response status: ${response.statusCode}');
-      print('Pending properties response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Safely handle the properties array
-        if (data is Map<String, dynamic> && data['properties'] is List) {
-          return List<Map<String, dynamic>>.from(
-              data['properties'].map((item) => Map<String, dynamic>.from(item))
-          );
-        } else {
-          print('Unexpected response format for pending properties');
-          return [];
-        }
-      } else {
-        print('Pending properties API error: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to get pending properties: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Get pending properties error: $e');
-      return [];
-    }
-  }
 
   static Future<List<Map<String, dynamic>>> getAllTenants() async {
     try {
-      print('Fetching all tenants from: ${ApiPaths.adminTenants}');
-
       final response = await http.get(
         Uri.parse(ApiPaths.adminTenants),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('All tenants response status: ${response.statusCode}');
-      print('All tenants response body: ${response.body}');
-
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Safely handle the tenants array
-        if (data is Map<String, dynamic> && data['tenants'] is List) {
+        final data = json.decode(response.body);
+        if (data['tenants'] is List) {
           return List<Map<String, dynamic>>.from(
               data['tenants'].map((item) => Map<String, dynamic>.from(item))
           );
-        } else {
-          print('Unexpected response format for tenants');
-          return [];
         }
-      } else {
-        print('Tenants API error: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to get tenants: ${response.statusCode}');
       }
+      return [];
     } catch (e) {
-      print('Get tenants error: $e');
       return [];
     }
   }
 
   static Future<List<Map<String, dynamic>>> getAllLandlords() async {
     try {
-      print('Fetching all landlords from: ${ApiPaths.adminLandlords}');
-
       final response = await http.get(
-        Uri.parse(ApiPaths.adminLandlords),
+        Uri.parse(ApiPaths.adminLandlords), // CORRECTED ROUTE
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('All landlords response status: ${response.statusCode}');
-      print('All landlords response body: ${response.body}');
-
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // Safely handle the landlords array
-        if (data is Map<String, dynamic> && data['landlords'] is List) {
+        final data = json.decode(response.body);
+        if (data['landlords'] is List) {
           return List<Map<String, dynamic>>.from(
               data['landlords'].map((item) => Map<String, dynamic>.from(item))
           );
-        } else {
-          print('Unexpected response format for landlords');
-          return [];
         }
-      } else {
-        print('Landlords API error: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to get landlords: ${response.statusCode}');
       }
+      return [];
     } catch (e) {
-      print('Get landlords error: $e');
       return [];
     }
   }
 
   static Future<Map<String, dynamic>> getTenantDetails(String tenantId) async {
     try {
-      print('Fetching tenant details for ID: $tenantId');
+      print('🔍 Getting tenant details for: $tenantId');
 
       final response = await http.get(
         Uri.parse('${ApiPaths.adminTenantDetails}/$tenantId'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('Tenant details response status: ${response.statusCode}');
-      print('Tenant details response body: ${response.body}');
+      print('📊 Tenant details response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
+        final data = json.decode(response.body);
         return {
+          'success': true,
           'tenant': data['tenant'] ?? {},
           'ratings': data['ratings'] is List
               ? List<Map<String, dynamic>>.from(
@@ -539,34 +419,36 @@ class AuthService {
               : [],
         };
       } else {
-        print('Tenant details API error: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to get tenant details: ${response.statusCode}');
+        final errorData = json.decode(response.body);
+        return {
+          'success': false,
+          'tenant': {},
+          'ratings': [],
+          'message': errorData['error'] ?? 'Failed to get tenant details'
+        };
       }
     } catch (e) {
-      print('Get tenant details error: $e');
+      print('❌ Get tenant details error: $e');
       return {
+        'success': false,
         'tenant': {},
         'ratings': [],
+        'message': 'Network error: $e'
       };
     }
   }
 
   static Future<Map<String, dynamic>> getLandlordDetails(String landlordId) async {
     try {
-      print('Fetching landlord details for ID: $landlordId');
-
       final response = await http.get(
         Uri.parse('${ApiPaths.adminLandlordDetails}/$landlordId'),
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('Landlord details response status: ${response.statusCode}');
-      print('Landlord details response body: ${response.body}');
-
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
+        final data = json.decode(response.body);
         return {
+          'success': true,
           'landlord': data['landlord'] ?? {},
           'properties': data['properties'] is List
               ? List<Map<String, dynamic>>.from(
@@ -575,67 +457,180 @@ class AuthService {
               : [],
         };
       } else {
-        print('Landlord details API error: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to get landlord details: ${response.statusCode}');
+        return {
+          'success': false,
+          'landlord': {},
+          'properties': [],
+          'message': 'Failed to get landlord details'
+        };
       }
     } catch (e) {
-      print('Get landlord details error: $e');
       return {
+        'success': false,
         'landlord': {},
         'properties': [],
+        'message': 'Network error: $e'
       };
     }
   }
 
-  static Future<void> verifyLandlord(int landlordId, bool approve) async {
+  static Future<List<Map<String, dynamic>>> getPendingLandlords() async {
     try {
-      print('${approve ? 'Approving' : 'Rejecting'} landlord ID: $landlordId');
-
-      final response = await http.post(
-        Uri.parse('${ApiPaths.adminVerifyLandlord}/$landlordId'),
-        body: jsonEncode({'approve': approve}),
+      final response = await http.get(
+        Uri.parse(ApiPaths.adminPendingLandlords), // NOW EXISTS IN SERVER
         headers: {'Content-Type': 'application/json'},
       ).timeout(const Duration(seconds: 30));
 
-      print('Verify landlord response status: ${response.statusCode}');
-      print('Verify landlord response body: ${response.body}');
-
-      if (response.statusCode != 200) {
-        final data = jsonDecode(response.body);
-        throw Exception(data['error'] ?? 'Failed to verify landlord');
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['landlords'] is List) {
+          return List<Map<String, dynamic>>.from(
+              data['landlords'].map((item) => Map<String, dynamic>.from(item))
+          );
+        }
       }
+      return [];
     } catch (e) {
-      print('Verify landlord error: $e');
-      throw Exception('Failed to verify landlord: $e');
+      return [];
     }
   }
 
-  static Future<void> verifyProperty(int propertyId, bool approve) async {
+  static Future<List<Map<String, dynamic>>> getPendingProperties() async {
     try {
-      print('${approve ? 'Approving' : 'Rejecting'} property ID: $propertyId');
+      final response = await http.get(
+        Uri.parse(ApiPaths.adminPendingProperties),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
 
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['properties'] is List) {
+          return List<Map<String, dynamic>>.from(
+              data['properties'].map((item) => Map<String, dynamic>.from(item))
+          );
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> verifyLandlord(int landlordId, bool approve) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiPaths.adminVerifyLandlord}/$landlordId'), // CORRECTED ROUTE
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'approve': approve}),
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      return {
+        'success': response.statusCode == 200,
+        'message': data['message'] ?? (approve ? 'Landlord approved' : 'Landlord rejected')
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+
+  static Future<Map<String, dynamic>> verifyProperty(int propertyId, bool approve) async {
+    try {
       final response = await http.post(
         Uri.parse('${ApiPaths.adminVerifyProperty}/$propertyId'),
-        body: jsonEncode({'approve': approve}),
         headers: {'Content-Type': 'application/json'},
+        body: json.encode({'approve': approve}),
       ).timeout(const Duration(seconds: 30));
 
-      print('Verify property response status: ${response.statusCode}');
-      print('Verify property response body: ${response.body}');
+      final data = json.decode(response.body);
 
-      if (response.statusCode != 200) {
-        final data = jsonDecode(response.body);
-        throw Exception(data['error'] ?? 'Failed to verify property');
-      }
+      return {
+        'success': response.statusCode == 200,
+        'message': data['message'] ?? (approve ? 'Property approved' : 'Property rejected')
+      };
     } catch (e) {
-      print('Verify property error: $e');
-      throw Exception('Failed to verify property: $e');
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
     }
   }
 
-  // ========== PROPERTY METHODS ==========
+  // =================== LANDLORD METHODS ===================
 
-  static Future<Map<String, dynamic>> requestProperty({
+  static Future<Map<String, dynamic>> getLandlordProfile(int landlordId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiPaths.landlordProfile(landlordId)),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'profile': data['profile']
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to get profile'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateLandlordProfile({
+    required int landlordId,
+    required String name,
+    required String phone,
+    required String address,
+  }) async {
+    try {
+      final response = await http.put(
+        Uri.parse(ApiPaths.updateLandlordProfile(landlordId)),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'name': name,
+          'phone': phone,
+          'address': address,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'profile': data['profile'],
+          'message': data['message'] ?? 'Profile updated successfully'
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to update profile'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> addProperty({
     required int landlordId,
     required String address,
     required String street,
@@ -644,47 +639,329 @@ class AuthService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse(ApiPaths.propertyRequest),
-        body: jsonEncode({
+        Uri.parse(ApiPaths.addProperty),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
           'landlordId': landlordId,
           'address': address,
           'street': street,
           'city': city,
           'postalCode': postalCode,
         }),
-        headers: {'Content-Type': 'application/json'},
-      );
+      ).timeout(const Duration(seconds: 30));
 
-      final data = jsonDecode(response.body);
+      final data = json.decode(response.body);
 
       if (response.statusCode == 201) {
         return {
           'success': true,
-          'message': data['message'] ?? 'Property request submitted',
-          'propertyId': data['propertyId'],
+          'message': data['message'] ?? 'Property request submitted for admin approval',
+          'propertyId': data['propertyId']
         };
       } else {
         return {
           'success': false,
-          'message': data['error'] ?? 'Failed to submit property request',
+          'message': data['error'] ?? 'Failed to add property'
         };
       }
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error: ${e.toString()}',
+        'message': 'Network error: $e'
       };
     }
   }
 
-  // Helper method to safely parse integers
+  static Future<Map<String, dynamic>> getLandlordProperties(int landlordId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiPaths.landlordProperties(landlordId)),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'properties': data['properties'] ?? []
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to get properties',
+          'properties': []
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+        'properties': []
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> searchTenant({
+    required String query,
+    required int landlordId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiPaths.landlordSearchTenant}?query=$query&landlordId=$landlordId'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        final tenants = List<Map<String, dynamic>>.from(data['tenants'] ?? []);
+
+        return {
+          'success': true,
+          'tenants': tenants
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to search tenants',
+          'tenants': []
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+        'tenants': []
+      };
+    }
+  }
+
+
+
+
+// Get search history for landlord
+  static Future<Map<String, dynamic>> getSearchHistory(int landlordId) async {
+    try {
+      print('🔍 Getting search history for landlord: $landlordId');
+
+      final response = await http.get(
+        Uri.parse(ApiPaths.landlordSearchHistory(landlordId)),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+      print('📊 Search history response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'searchHistory': data['searchHistory'] ?? []
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to get search history',
+          'searchHistory': []
+        };
+      }
+    } catch (e) {
+      print('❌ Search history error: $e');
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+        'searchHistory': []
+      };
+    }
+  }
+
+
+
+  static Future<Map<String, dynamic>> getTenantRatings(int tenantId) async {
+    try {
+      print('📋 Getting tenant ratings for: $tenantId');
+
+      final response = await http.get(
+        Uri.parse(ApiPaths.tenantRatings(tenantId)),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+      print('📊 Tenant ratings response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'tenant': data['tenant'] ?? {},
+          'ratings': data['ratings'] ?? [],
+          'lastTwoStays': data['lastTwoStays'] ?? data['ratings'] ?? []
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to get tenant ratings',
+          'tenant': {},
+          'ratings': [],
+          'lastTwoStays': []
+        };
+      }
+    } catch (e) {
+      print('❌ Tenant ratings error: $e');
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+        'tenant': {},
+        'ratings': [],
+        'lastTwoStays': []
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getPropertyHistory(int propertyId) async {
+    try {
+      print('🏠 Getting property history for: $propertyId');
+
+      final response = await http.get(
+        Uri.parse(ApiPaths.propertyHistory(propertyId)),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+      print('📊 Property history response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'history': data['history'] ?? []
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to get property history',
+          'history': []
+        };
+      }
+    } catch (e) {
+      print('❌ Property history error: $e');
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+        'history': []
+      };
+    }
+  }
+
+
+  static Future<Map<String, dynamic>> rateTenant({
+    required int tenantId,
+    required int landlordId,
+    required int propertyId,
+    required int rentPayment,
+    required int communication,
+    required int propertyCare,
+    required int utilities,
+    required bool respectOthers,
+    required int propertyHandover,
+    required String comments,
+    required String stayPeriodStart,
+    String? stayPeriodEnd,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiPaths.rateTenant),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'tenantId': tenantId,
+          'landlordId': landlordId,
+          'propertyId': propertyId,
+          'rentPayment': rentPayment,
+          'communication': communication,
+          'propertyCare': propertyCare,
+          'utilities': utilities,
+          'respectOthers': respectOthers,
+          'propertyHandover': propertyHandover,
+          'comments': comments,
+          'stayPeriodStart': stayPeriodStart,
+          'stayPeriodEnd': stayPeriodEnd,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Tenant rating submitted successfully',
+          'ratingId': data['ratingId']
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to submit rating'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+  // =================== TENANT METHODS ===================
+
+  static Future<Map<String, dynamic>> getTenantProfile(int tenantId) async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiPaths.tenantProfile(tenantId)),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'profile': data['profile']
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['error'] ?? 'Failed to get tenant profile'
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e'
+      };
+    }
+  }
+
+
+
+
+
+  // =================== UTILITY METHODS ===================
+
   static int _parseToInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
-    if (value is String) {
-      return int.tryParse(value) ?? 0;
-    }
+    if (value is String) return int.tryParse(value) ?? 0;
     if (value is double) return value.toInt();
     return 0;
+  }
+
+  static double _parseToDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  static String _parseToString(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
   }
 }

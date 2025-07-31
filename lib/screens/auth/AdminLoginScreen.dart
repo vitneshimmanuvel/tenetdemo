@@ -87,17 +87,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       return;
     }
 
-    // Check if email contains 'alfa' (matching backend validation)
-    if (!emailLower.contains('alfa')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid admin email. Email must contain "alfa".'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     if (password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -237,9 +226,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      labelText: _isRegisterMode
-                          ? 'Email (must contain "alfa")'
-                          : 'Email',
+                      labelText: 'Email',
                       prefixIcon: const Icon(Icons.email),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -248,13 +235,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: adminColor, width: 2),
                       ),
-                      errorText: _isRegisterMode &&
-                          _emailController.text.isNotEmpty &&
-                          !_emailController.text.toLowerCase().contains('alfa')
-                          ? 'Email must contain "alfa"'
-                          : null,
                     ),
-                    onChanged: (_) => setState(() {}), // Rebuild to show/hide error
                   ),
                   const SizedBox(height: 20),
 
